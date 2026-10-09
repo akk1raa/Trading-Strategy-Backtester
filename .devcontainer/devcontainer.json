@@ -1,0 +1,19 @@
+{
+  "name": "GC Backtest",
+  "image": "mcr.microsoft.com/devcontainers/python:3.12",
+  "postCreateCommand": "pip install -e '.[dev]'",
+  "postAttachCommand": "gcbt ui --host 0.0.0.0",
+  "forwardPorts": [8765],
+  "portsAttributes": {
+    "8765": { "label": "GC Backtest dashboard", "onAutoForward": "openBrowser", "visibility": "private" }
+  },
+  "secrets": {
+    "ANTHROPIC_API_KEY": {
+      "description": "Anthropic API key. Only needed for the YouTube link -> strategy step.",
+      "documentationUrl": "https://console.anthropic.com/"
+    }
+  },
+  "customizations": {
+    "vscode": { "extensions": ["ms-python.python"] }
+  }
+}

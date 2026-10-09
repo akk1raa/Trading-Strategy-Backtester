@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gc-backtester"
+version = "0.1.0"
+description = "Turn a YouTube trading-strategy video into a GC (gold futures) backtest, with a multi-timeframe win-rate dashboard."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+  "pandas>=2.2",
+  "numpy>=1.26",
+  "matplotlib>=3.8",
+  "yfinance>=0.2.50",
+  "youtube-transcript-api>=1.0",
+  "anthropic>=0.40",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pyyaml>=6"]
+whisper = ["yt-dlp", "openai-whisper"]
+
+[project.scripts]
+gcbt = "gcbt.cli:main"
+
+[tool.setuptools]
+packages = ["gcbt"]
+
+[tool.setuptools.package-data]
+gcbt = ["ui/*.html", "examples/*.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

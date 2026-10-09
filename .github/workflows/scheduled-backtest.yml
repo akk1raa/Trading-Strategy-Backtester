@@ -1,0 +1,39 @@
+name: scheduled-backtest
+
+# Backtests a saved strategy spec on live GC data and posts the win-rate table to the run summary.
+# Run it by hand from the Actions tab, or let the schedule do it.
+on:
+  workflow_dispatch:
+    inputs:
+      spec:
+        description: Path to a strategy spec in this repo
+        default: strategies/example.json
+      source:
+        description: Data source (yfinance or synthetic)
+        default: yfinance
+        type: choice
+        options: [yfinance, synthetic]
+  schedule:
+    - cron: "0 14 * * 1"   # Mondays, 14:00 UTC
+
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -e .
+      - name: Backtest 5m / 15m / 1h, last week and month
+        env:
+          SPEC: ${{ inputs.spec || 'strategies/example.json' }}
+          SOURCE: ${{ inputs.source || 'yfinance' }}
+        run: |
+          mkdir -p out
+          gcbt mtf --spec "$SPEC" --source "$SOURCE" --json-out out/mtf.json | tee out/mtf.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: backtest-results
+          path: out/

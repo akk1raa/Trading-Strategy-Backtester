@@ -1,0 +1,25 @@
+{
+  "name": "Demo: EMA 9/21 cross, RSI filter, ATR stop/target",
+  "timeframe": "15m",
+  "direction": "both",
+  "long_entry": {"all": [
+    {"left": {"ind": "ema", "period": 9}, "op": "crosses_above", "right": {"ind": "ema", "period": 21}},
+    {"left": {"ind": "rsi", "period": 14}, "op": ">", "right": 50}
+  ]},
+  "long_exit": {"all": [
+    {"left": {"ind": "ema", "period": 9}, "op": "crosses_below", "right": {"ind": "ema", "period": 21}}
+  ]},
+  "short_entry": {"all": [
+    {"left": {"ind": "ema", "period": 9}, "op": "crosses_below", "right": {"ind": "ema", "period": 21}},
+    {"left": {"ind": "rsi", "period": 14}, "op": "<", "right": 50}
+  ]},
+  "short_exit": {"all": [
+    {"left": {"ind": "ema", "period": 9}, "op": "crosses_above", "right": {"ind": "ema", "period": 21}}
+  ]},
+  "stop": {"kind": "atr_multiple", "value": 1.5, "atr_period": 14},
+  "target": {"kind": "atr_multiple", "value": 2.0, "atr_period": 14},
+  "session_utc": null,
+  "contracts": 1,
+  "uncodifiable": [],
+  "confidence": "high"
+}

@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.venv/
+venv/
+.env
+.DS_Store
+
+# local outputs and market data (data licenses often forbid redistribution)
+out/
+data/
+*.csv
+spec.json

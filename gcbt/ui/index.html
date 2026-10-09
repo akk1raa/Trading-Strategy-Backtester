@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GC // BACKTEST</title>
+<style>
+  :root{
+    --bg:#05070d; --panel:rgba(14,22,38,.62); --line:rgba(120,200,255,.14);
+    --text:#d9e6f5; --dim:#6f86a3; --cyan:#34e1ff; --green:#3dffb0; --amber:#ffc24d; --red:#ff4d8d;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  }
+  *{box-sizing:border-box;margin:0}
+  html,body{height:100%}
+  body{
+    background:
+      radial-gradient(900px 500px at 15% -10%, rgba(52,225,255,.12), transparent 60%),
+      radial-gradient(800px 500px at 100% 0%, rgba(150,90,255,.10), transparent 60%),
+      var(--bg);
+    color:var(--text); font-family:var(--mono); font-size:13px; letter-spacing:.02em;
+    min-height:100vh; padding:28px clamp(16px,4vw,48px) 48px; position:relative; overflow-x:hidden;
+  }
+  body::before{ /* faint grid */
+    content:""; position:fixed; inset:0; pointer-events:none; opacity:.35;
+    background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);
+    background-size:56px 56px; mask-image:radial-gradient(ellipse at 50% 20%,#000 20%,transparent 75%);
+  }
+  header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:26px;position:relative}
+  .logo{font-weight:700;letter-spacing:.28em;font-size:15px}
+  .logo b{color:var(--cyan);text-shadow:0 0 14px var(--cyan)}
+  .status{display:flex;align-items:center;gap:8px;color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.18em}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 10px var(--green);animation:pulse 2s infinite}
+  .dot.busy{background:var(--amber);box-shadow:0 0 10px var(--amber);animation-duration:.5s}
+  .dot.err{background:var(--red);box-shadow:0 0 10px var(--red);animation:none}
+  @keyframes pulse{50%{opacity:.35}}
+
+  .bar{display:flex;gap:10px;flex-wrap:wrap;position:relative;margin-bottom:18px}
+  .glass{background:var(--panel);border:1px solid var(--line);border-radius:14px;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+  .bar input,.bar select{
+    background:rgba(5,10,20,.7);border:1px solid var(--line);color:var(--text);font:inherit;
+    padding:13px 15px;border-radius:12px;outline:none;transition:border-color .2s, box-shadow .2s;
+  }
+  .bar input{flex:1 1 360px;min-width:0}
+  .bar input:focus,.bar select:focus{border-color:var(--cyan);box-shadow:0 0 0 3px rgba(52,225,255,.12)}
+  button{font:inherit;cursor:pointer;border:0;color:#02131a;font-weight:700;letter-spacing:.14em;padding:13px 22px;border-radius:12px;
+    background:linear-gradient(135deg,var(--cyan),var(--green));box-shadow:0 0 24px rgba(52,225,255,.35);transition:transform .15s, box-shadow .2s}
+  button:hover{transform:translateY(-1px);box-shadow:0 0 34px rgba(52,225,255,.55)}
+  button.ghost{background:transparent;color:var(--cyan);border:1px solid var(--line);box-shadow:none;font-weight:600}
+  button:disabled{opacity:.5;cursor:wait;transform:none}
+
+  .chips{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px;min-height:28px;position:relative}
+  .chip{padding:5px 11px;border-radius:999px;border:1px solid var(--line);color:var(--dim);font-size:11px;letter-spacing:.1em;text-transform:uppercase}
+  .chip.name{color:var(--text);border-color:rgba(52,225,255,.4)}
+  .chip.warn{color:var(--amber);border-color:rgba(255,194,77,.4)}
+
+  .seg{display:inline-flex;padding:4px;border-radius:999px;position:relative;margin-bottom:20px}
+  .seg button{background:transparent;box-shadow:none;color:var(--dim);padding:9px 24px;border-radius:999px;position:relative;z-index:1;font-weight:600}
+  .seg button.on{color:#02131a}
+  .seg .pill{position:absolute;top:4px;bottom:4px;left:4px;width:calc(50% - 4px);border-radius:999px;
+    background:linear-gradient(135deg,var(--cyan),var(--green));box-shadow:0 0 20px rgba(52,225,255,.4);transition:transform .35s cubic-bezier(.3,1.2,.4,1)}
+  .seg[data-win="month"] .pill{transform:translateX(100%)}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:18px;position:relative}
+  .card{padding:22px 22px 18px;position:relative;overflow:hidden;opacity:0;transform:translateY(10px);animation:in .6s forwards}
+  .card:nth-child(2){animation-delay:.08s}.card:nth-child(3){animation-delay:.16s}
+  @keyframes in{to{opacity:1;transform:none}}
+  .card::after{content:"";position:absolute;inset:0;border-radius:14px;pointer-events:none;
+    background:linear-gradient(180deg,rgba(255,255,255,.04),transparent 40%)}
+  .tf{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
+  .tf h2{font-size:22px;letter-spacing:.12em;font-weight:700}
+  .tf span{color:var(--dim);font-size:11px;letter-spacing:.14em;text-transform:uppercase}
+  .ring{position:relative;width:170px;height:170px;margin:10px auto 14px}
+  .ring svg{width:100%;height:100%;transform:rotate(-90deg);overflow:visible}
+  .ring .track{stroke:rgba(120,200,255,.1)}
+  .ring .arc{stroke-linecap:round;transition:stroke-dashoffset 1s cubic-bezier(.2,.8,.2,1), stroke .4s;filter:drop-shadow(0 0 7px currentColor)}
+  .ring .mid{position:absolute;inset:0;display:grid;place-content:center;text-align:center}
+  .ring .pct{font-size:34px;font-weight:700;letter-spacing:.02em}
+  .ring .lbl{font-size:10px;color:var(--dim);letter-spacing:.22em;text-transform:uppercase;margin-top:2px}
+  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:6px;text-align:center}
+  .stats div{padding:9px 4px;border-radius:10px;background:rgba(5,10,20,.5);border:1px solid var(--line)}
+  .stats b{display:block;font-size:15px}
+  .stats small{font-size:9px;color:var(--dim);letter-spacing:.18em;text-transform:uppercase}
+  .pos{color:var(--green)}.neg{color:var(--red)}
+  svg.spark{width:100%;height:46px;margin-top:14px;display:block}
+  .badge{position:absolute;top:14px;right:14px;font-size:9px;letter-spacing:.16em;padding:4px 8px;border-radius:6px;
+    color:var(--amber);border:1px solid rgba(255,194,77,.45);background:rgba(255,194,77,.07);text-transform:uppercase;display:none}
+  .card.low .badge{display:block}
+
+  .msg{margin:26px 0 0;padding:14px 16px;border-radius:12px;color:var(--dim);line-height:1.6;position:relative}
+  .msg.err{color:var(--red);border:1px solid rgba(255,77,141,.35);background:rgba(255,77,141,.06)}
+  footer{margin-top:22px;color:var(--dim);font-size:11px;line-height:1.7;position:relative;max-width:900px}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">GC<b>//</b>BACKTEST</div>
+  <div class="status"><span class="dot" id="dot"></span><span id="status">idle</span></div>
+</header>
+
+<div class="bar glass" style="padding:10px">
+  <input id="url" placeholder="Paste a YouTube strategy link…" autocomplete="off" spellcheck="false">
+  <select id="source" title="Data source">
+    <option value="yfinance">Data: yfinance GC=F</option>
+    <option value="synthetic">Data: synthetic (demo)</option>
+  </select>
+  <button id="run">RUN</button>
+  <button id="demo" class="ghost">DEMO</button>
+</div>
+
+<div class="bar glass" id="paste" style="padding:10px;display:none;flex-direction:column">
+  <div style="color:var(--amber);font-size:11px;letter-spacing:.12em;text-transform:uppercase;margin:2px 4px 8px">
+    Captions could not be fetched. Paste the video transcript instead (YouTube: ... menu -> Show transcript).
+  </div>
+  <textarea id="transcript" rows="6" spellcheck="false" placeholder="Paste transcript text here…"
+    style="width:100%;resize:vertical;background:rgba(5,10,20,.7);border:1px solid var(--line);color:var(--text);font:inherit;padding:13px 15px;border-radius:12px;outline:none"></textarea>
+  <div style="margin-top:10px"><button id="runT">RUN TRANSCRIPT</button></div>
+</div>
+
+<div class="chips" id="chips"></div>
+
+<div class="seg glass" id="seg" data-win="week">
+  <span class="pill"></span>
+  <button class="on" data-win="week">LAST WEEK</button>
+  <button data-win="month">LAST MONTH</button>
+</div>
+
+<div class="grid" id="grid"></div>
+<div class="msg glass" id="msg">Paste a strategy video and press RUN, or hit DEMO to see the dashboard on a built-in EMA strategy.</div>
+
+<footer>
+  Win rate is one number, not an edge. Read it with profit factor and net P&amp;L, and treat anything marked LOW SAMPLE as noise.
+  Indicator periods are counted in bars, so the same rules behave differently on 5m, 15m and 1h.
+  Backtests include commission and slippage but cannot capture every real-world fill. Past results do not predict future results.
+</footer>
+
+<script>
+const TFS = ["5m","15m","1h"];
+const C = 2 * Math.PI * 52;           // ring circumference (r = 52)
+let DATA = null, WIN = "week";
+
+const $ = id => document.getElementById(id);
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+const money = v => (v < 0 ? "-$" : "+$") + Math.abs(v).toLocaleString(undefined,{maximumFractionDigits:0});
+const wrColor = w => w == null ? "var(--dim)" : w >= .55 ? "var(--green)" : w >= .45 ? "var(--amber)" : "var(--red)";
+
+function setStatus(text, kind){ $("status").textContent = text; $("dot").className = "dot " + (kind||""); }
+
+function spark(curve){
+  const svg = document.createElementNS("http://www.w3.org/2000/svg","svg");
+  svg.setAttribute("viewBox","0 0 200 46"); svg.setAttribute("class","spark"); svg.setAttribute("preserveAspectRatio","none");
+  if (!curve || curve.length < 2) return svg;
+  const pts = [0, ...curve], min = Math.min(...pts), max = Math.max(...pts), rng = (max-min)||1;
+  const d = pts.map((v,i) => `${i?"L":"M"}${(i/(pts.length-1))*200},${42-((v-min)/rng)*38}`).join(" ");
+  const up = curve[curve.length-1] >= 0, col = up ? "#3dffb0" : "#ff4d8d";
+  const area = document.createElementNS(svg.namespaceURI,"path");
+  area.setAttribute("d", d + " L200,46 L0,46 Z"); area.setAttribute("fill", col); area.setAttribute("opacity",".10");
+  const line = document.createElementNS(svg.namespaceURI,"path");
+  line.setAttribute("d", d); line.setAttribute("fill","none"); line.setAttribute("stroke", col);
+  line.setAttribute("stroke-width","1.6"); line.setAttribute("vector-effect","non-scaling-stroke");
+  svg.append(area, line); return svg;
+}
+
+function buildCards(){
+  const grid = $("grid"); grid.replaceChildren();
+  for (const tf of TFS){
+    const card = el("div","card glass"); card.id = "card-"+tf;
+    const head = el("div","tf"); head.append(el("h2",null,tf.toUpperCase()), el("span",null,"win rate"));
+    const ring = el("div","ring");
+    ring.innerHTML = `<svg viewBox="0 0 120 120"><circle class="track" cx="60" cy="60" r="52" fill="none" stroke-width="7"/>
+      <circle class="arc" cx="60" cy="60" r="52" fill="none" stroke-width="7" stroke-dasharray="${C}" stroke-dashoffset="${C}"/></svg>
+      <div class="mid"><div class="pct" data-k="pct">--</div><div class="lbl" data-k="sub">no data</div></div>`;
+    const stats = el("div","stats");
+    for (const [k,l] of [["trades","trades"],["pf","profit factor"],["pnl","net p&l"]]){
+      const d = el("div"); const b = el("b",null,"--"); b.dataset.k = k; d.append(b, el("small",null,l)); stats.append(d);
+    }
+    const badge = el("div","badge","low sample");
+    const sparkHost = el("div"); sparkHost.dataset.k = "spark";
+    card.append(badge, head, ring, stats, sparkHost);
+    grid.append(card);
+  }
+}
+
+function countUp(node, to, fmt){
+  const from = parseFloat(node.dataset.v || "0"); node.dataset.v = to;
+  const t0 = performance.now(), dur = 700;
+  (function step(t){
+    const p = Math.min(1,(t-t0)/dur), e = 1-Math.pow(1-p,3);
+    node.textContent = fmt(from + (to-from)*e);
+    if (p < 1) requestAnimationFrame(step);
+  })(t0);
+}
+
+function render(){
+  if (!DATA) return;
+  for (const tf of TFS){
+    const r = DATA.results[tf][WIN], card = $("card-"+tf), q = k => card.querySelector(`[data-k="${k}"]`);
+    const arc = card.querySelector(".arc"), wr = r.win_rate, col = wrColor(wr);
+    arc.style.stroke = col; arc.style.color = col;
+    arc.style.strokeDashoffset = C * (1 - (wr || 0));
+    const pct = q("pct"); pct.style.color = col;
+    if (wr == null){ pct.textContent = "--"; pct.dataset.v = 0; q("sub").textContent = "no trades"; }
+    else { countUp(pct, wr*100, v => v.toFixed(1)+"%"); q("sub").textContent = `${r.wins} / ${r.trades} wins`; }
+    q("trades").textContent = r.trades;
+    q("pf").textContent = r.profit_factor == null ? (r.trades ? "∞" : "--") : r.profit_factor.toFixed(2);
+    const pnl = q("pnl"); pnl.textContent = r.trades ? money(r.net_pnl) : "--"; pnl.className = r.trades ? (r.net_pnl >= 0 ? "pos" : "neg") : "";
+    card.classList.toggle("low", r.trades < 10);
+    q("spark").replaceChildren(spark(r.curve));
+  }
+}
+
+function showChips(d){
+  const box = $("chips"); box.replaceChildren();
+  const s = d.strategy;
+  box.append(el("span","chip name", s.name), el("span","chip", s.direction), el("span","chip", "confidence: "+s.confidence),
+             el("span","chip", "data: "+d.source), el("span","chip", "rules from: "+(s.extracted_by||"?")));
+  if (s.uncodifiable && s.uncodifiable.length) box.append(el("span","chip warn", s.uncodifiable.length + " rule(s) not codified"));
+  const m = $("msg"); m.className = "msg glass"; m.replaceChildren();
+  if (s.uncodifiable && s.uncodifiable.length){
+    m.append(el("div",null,"Not backtested (the video's strategy includes things this tool cannot code):"));
+    const ul = el("ul"); ul.style.cssText = "margin:8px 0 0 18px";
+    s.uncodifiable.forEach(u => ul.append(el("li",null,u))); m.append(ul);
+  } else m.append(el("div",null,d.note));
+}
+
+async function run(body){
+  $("run").disabled = $("demo").disabled = $("runT").disabled = true; setStatus("running","busy");
+  try{
+    const res = await fetch("/api/run",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+    const d = await res.json();
+    if (!res.ok) throw new Error(d.error || res.statusText);
+    DATA = d; showChips(d); render(); setStatus("live"); $("paste").style.display = "none";
+  }catch(e){
+    setStatus("error","err"); const m = $("msg"); m.className = "msg glass err"; m.textContent = e.message;
+    if (body.url && /captions/i.test(e.message)) $("paste").style.display = "flex";  // offer the paste fallback
+  }finally{ $("run").disabled = $("demo").disabled = $("runT").disabled = false; }
+}
+
+$("run").onclick  = () => { const url = $("url").value.trim(); if (!url) return $("url").focus(); run({url, source:$("source").value}); };
+$("demo").onclick = () => run({demo:true, source:$("source").value});
+$("runT").onclick = () => { const transcript = $("transcript").value.trim(); if (!transcript) return $("transcript").focus(); run({transcript, source:$("source").value}); };
+$("url").addEventListener("keydown", e => { if (e.key === "Enter") $("run").click(); });
+$("seg").addEventListener("click", e => {
+  const b = e.target.closest("button[data-win]"); if (!b) return;
+  WIN = b.dataset.win; $("seg").dataset.win = WIN;
+  document.querySelectorAll("#seg button").forEach(x => x.classList.toggle("on", x === b));
+  render();
+});
+
+buildCards();
+</script>
+</body>
+</html>
